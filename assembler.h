@@ -338,6 +338,9 @@ void cca_assembler_bytegeneration(cca_token* tokens) {
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 			}
 			i += 2;
+		} else if (strcmp(tokens[i].value.string, "dup") == 0) {
+			cca_bytecode_add_byte(&bytecode, 0x05);
+			i += 1;
 		} else if (strcmp(tokens[i].value.string, "mov") == 0) {
 			i += 4;
 		} else {
