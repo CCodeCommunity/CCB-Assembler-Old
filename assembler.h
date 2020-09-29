@@ -27,12 +27,13 @@ char* cca_token_type_str(char type) {
 		case 4: return "register";
 		case 5: return "label";
 		case 6: return "end";
+		case 7: return "address";
 		default: return "unknown";
 	}
 }
 
 void cca_token_print(cca_token tok) {
-	if (tok.type == 1) {
+	if (tok.type == 1 || tok.type == 7) {
 		printf("Token[type: %s, value: %d]\n", cca_token_type_str(tok.type), tok.value.numeric);
 	} else {
 		printf("Token[type: %s, value: %s]\n", cca_token_type_str(tok.type), tok.value.string);
@@ -87,6 +88,10 @@ char cca_is_divider(char character) {
 	return character == ',';
 }
 
+char cca_is_address(char character) {
+	return character == '&';
+}
+
 char cca_is_comment(char character) {
 	return character == ';';
 }
@@ -139,6 +144,24 @@ cca_token cca_parse_number(char* code, unsigned int* readingPos) {
 	return tok;
 }
 
+cca_token cca_parse_address(char* code, unsigned int* readingPos) {
+	unsigned int n = 0;
+
+	cca_token tok;
+	tok.type = 7;
+
+	++*readingPos;
+	while(cca_is_number(code[*readingPos])) {
+		n = n*10 + code[*readingPos] - 48;
+		++*readingPos;
+	}
+
+	tok.value.numeric = n;
+
+	return tok;
+}
+
+
 cca_token* cca_assembler_lex(cca_file_content content) {
 	// file data
 	unsigned int size = content.fileSize;
@@ -182,12 +205,21 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 				tokens = realloc(tokens, tokCapacity);
 			}
 			tokens[tokCount - 1] = newTok;
+		} else if (cca_is_address(current)){
+			cca_token newTok = cca_parse_address(assembly, &readingPos);
+			++tokCount;
+			if (tokCount >= tokCapacity) {
+				tokCapacity *= 2;
+				tokens = realloc(tokens, tokCapacity);
+			}
+			tokens[tokCount - 1] = newTok;
 		} else if (cca_is_comment(current)) {
 			puts("[INFO] found comment");
 		}
 
 		else {
 			printf("[ERROR] unknown syntax: %c\n", current);
+			exit(1);
 		}
 		++readingPos;
 	}
@@ -214,7 +246,7 @@ char strContainedIn(char* string, char** array) {
 }
 
 void cca_assembler_recognize(cca_token* tokens) {
-	char* mnemonics[] = {"mov", "stp", "psh"};
+	char* mnemonics[] = { "mov", "stp", "psh", "pop", "dup", "mov", "add", "sub", "mul", "div", "not", "and", "or", "xor", "jmp", "cmp", "frs", "inc", "dec", "call", "ret", "syscall", "je", "jne", "jg", "js", "jo" };
 	unsigned int i = 0;
 
 	while(tokens[i].type != 6) {
@@ -284,6 +316,7 @@ void cca_assembler_bytegeneration(cca_token* tokens) {
 
 	unsigned int i = 0;
 	while(tokens[i].type != 6) {
+		//printf("assembling opcode: %s\n", tokens[i].value.string);
 		if (strcmp(tokens[i].value.string, "stp") == 0) {
 			cca_bytecode_add_byte(&bytecode, 0x00);
 			i += 1;
@@ -294,6 +327,15 @@ void cca_assembler_bytegeneration(cca_token* tokens) {
 			} else if (tokens[i + 1].type == 4){
 				cca_bytecode_add_byte(&bytecode, 0x02);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+			}
+			i += 2;
+		} else if (strcmp(tokens[i].value.string, "pop") == 0) {
+			if (tokens[i + 1].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x03);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+			} else if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x04);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 			}
 			i += 2;
 		} else if (strcmp(tokens[i].value.string, "mov") == 0) {
