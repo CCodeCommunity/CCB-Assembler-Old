@@ -34,9 +34,9 @@ char* cca_token_type_str(char type) {
 
 void cca_token_print(cca_token tok) {
 	if (tok.type == 1 || tok.type == 7) {
-		printf("Token[type: %s, value: %d]\n", cca_token_type_str(tok.type), tok.value.numeric);
+		printf("Token[type: %s(%d), value: %d]\n", cca_token_type_str(tok.type), tok.type, tok.value.numeric);
 	} else {
-		printf("Token[type: %s, value: %s]\n", cca_token_type_str(tok.type), tok.value.string);
+		printf("Token[type: %s(%d), value: %s]\n", cca_token_type_str(tok.type), tok.type, tok.value.string);
 	}
 }
 
@@ -140,7 +140,7 @@ cca_token cca_parse_number(char* code, unsigned int* readingPos) {
 	}
 
 	tok.value.numeric = n;
-
+	--*readingPos;
 	return tok;
 }
 
@@ -157,7 +157,7 @@ cca_token cca_parse_address(char* code, unsigned int* readingPos) {
 	}
 
 	tok.value.numeric = n;
-
+	--*readingPos;
 	return tok;
 }
 
@@ -327,6 +327,8 @@ void cca_assembler_bytegeneration(cca_token* tokens) {
 			} else if (tokens[i + 1].type == 4){
 				cca_bytecode_add_byte(&bytecode, 0x02);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+			} else {
+				puts("[ERROR] on 'psh' instruction, illegal combination of operands");
 			}
 			i += 2;
 		} else if (strcmp(tokens[i].value.string, "pop") == 0) {
@@ -336,12 +338,34 @@ void cca_assembler_bytegeneration(cca_token* tokens) {
 			} else if (tokens[i + 1].type == 7) {
 				cca_bytecode_add_byte(&bytecode, 0x04);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+			} else {
+				puts("[ERROR] on 'pop' instruction, illegal combination of operands");
 			}
 			i += 2;
 		} else if (strcmp(tokens[i].value.string, "dup") == 0) {
 			cca_bytecode_add_byte(&bytecode, 0x05);
 			i += 1;
 		} else if (strcmp(tokens[i].value.string, "mov") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
+				cca_bytecode_add_byte(&bytecode, 0x06);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+			} else if (tokens[i + 1].type == 7 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
+				cca_bytecode_add_byte(&bytecode, 0x07);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+			} else if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x08);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+			} else if (tokens[i + 1].type == 7 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x09);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+			} else {
+				puts("[ERROR] on 'mov' instruction, illegal combination of operands");
+				printf(" %d", tokens[i + 1].type);
+			}
 			i += 4;
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
@@ -366,6 +390,11 @@ void cca_assemble(char* fileName) {
 
 	// generate bytecode
 	cca_assembler_bytegeneration(tokens);
+
+	int i = 0;
+	/*while(tokens[i].type != 6) {
+		cca_token_print(tokens[i++]);
+	}*/
 
 	free(tokens);
 	free(content.content);
