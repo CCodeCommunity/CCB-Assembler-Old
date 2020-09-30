@@ -10,8 +10,11 @@ int main(int argc, char* argv[]) {
 		} else {
 			// assembling
 			printf("assembling '%s'\n", argv[1]);
-			cca_assemble(argv[1]);
-			puts("done!");
+			if (cca_assemble(argv[1])) {
+				puts("done!");
+			} else {
+				puts("failed to assemble due to errors");
+			}
 		}
 	}
 

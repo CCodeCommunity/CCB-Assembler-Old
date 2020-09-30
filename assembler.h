@@ -233,10 +233,8 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	return tokens;
 }
 
-char strContainedIn(char* string, char** array) {
-	unsigned int arrayLength = sizeof(array) / sizeof(char*);
-
-	for (int i = 0; i <= arrayLength; i++) {
+char strContainedIn(char* string, char* array[], unsigned int arrayLength) {
+	for (int i = 0; i < arrayLength; i++) {
 		if (strcmp(string, array[i]) == 0) {
 			return 1;
 		}
@@ -247,11 +245,12 @@ char strContainedIn(char* string, char** array) {
 
 void cca_assembler_recognize(cca_token* tokens) {
 	char* mnemonics[] = { "mov", "stp", "psh", "pop", "dup", "mov", "add", "sub", "mul", "div", "not", "and", "or", "xor", "jmp", "cmp", "frs", "inc", "dec", "call", "ret", "syscall", "je", "jne", "jg", "js", "jo" };
+	unsigned int mnemonicsCount = 27;
 	unsigned int i = 0;
 
 	while(tokens[i].type != 6) {
 		if (tokens[i].type == 0) {
-			if (strContainedIn(tokens[i].value.string, (char**)mnemonics)) {
+			if (strContainedIn(tokens[i].value.string, mnemonics, mnemonicsCount)) {
 				tokens[i].type = 3;
 			}
 
@@ -305,8 +304,10 @@ void cca_bytecode_add_uint(cca_bytecode* bytecode, unsigned int n) {
 	bytecode->bytecode[bytecode->bytecodeLength - 1] = n & 0xff;
 }
 
-void cca_assembler_bytegeneration(cca_token* tokens) {
+char cca_assembler_bytegeneration(cca_token* tokens) {
+
 	FILE* fp = fopen("test.ccb", "wb+");
+
 	cca_bytecode bytecode;
 	bytecode.bytecodeCapacity = 100;
 	bytecode.bytecodeLength = 0;
@@ -314,71 +315,214 @@ void cca_assembler_bytegeneration(cca_token* tokens) {
 
 	cca_bytecode_add_uint(&bytecode, 0x1d1d1d1d);
 
+	char error = 0;
 	unsigned int i = 0;
 	while(tokens[i].type != 6) {
-		//printf("assembling opcode: %s\n", tokens[i].value.string);
-		if (strcmp(tokens[i].value.string, "stp") == 0) {
-			cca_bytecode_add_byte(&bytecode, 0x00);
+		if (tokens[i].type != 3) {
+			if (tokens[i].type == 1 || tokens[i].type == 7)
+				printf("[ERROR] unexpected token: %d\n", tokens[i].value.numeric);
+			else
+				printf("[ERROR] unexpected token: %s\n", tokens[i].value.string);
 			i += 1;
+			error = 1;
+		} else if (strcmp(tokens[i].value.string, "stp") == 0) {
+			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x00);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'stp' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
 		} else if (strcmp(tokens[i].value.string, "psh") == 0) {
 			if (tokens[i + 1].type == 1) {
 				cca_bytecode_add_byte(&bytecode, 0x01);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
 			} else if (tokens[i + 1].type == 4){
 				cca_bytecode_add_byte(&bytecode, 0x02);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				i += 2;
 			} else {
 				puts("[ERROR] on 'psh' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
 			}
-			i += 2;
 		} else if (strcmp(tokens[i].value.string, "pop") == 0) {
 			if (tokens[i + 1].type == 4) {
 				cca_bytecode_add_byte(&bytecode, 0x03);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				i += 2;
 			} else if (tokens[i + 1].type == 7) {
 				cca_bytecode_add_byte(&bytecode, 0x04);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
 			} else {
 				puts("[ERROR] on 'pop' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
 			}
-			i += 2;
 		} else if (strcmp(tokens[i].value.string, "dup") == 0) {
-			cca_bytecode_add_byte(&bytecode, 0x05);
-			i += 1;
+			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x05);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'dup' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
 		} else if (strcmp(tokens[i].value.string, "mov") == 0) {
 			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
 				cca_bytecode_add_byte(&bytecode, 0x06);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+				i += 4;
 			} else if (tokens[i + 1].type == 7 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
 				cca_bytecode_add_byte(&bytecode, 0x07);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+				i += 4;
 			} else if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 7) {
 				cca_bytecode_add_byte(&bytecode, 0x08);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+				i += 4;
 			} else if (tokens[i + 1].type == 7 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
 				cca_bytecode_add_byte(&bytecode, 0x09);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
 			} else {
 				puts("[ERROR] on 'mov' instruction, illegal combination of operands");
-				printf(" %d", tokens[i + 1].type);
+				error = 1;
+				i += 1;
 			}
-			i += 4;
+		} else if (strcmp(tokens[i].value.string, "add") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x10);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x11);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'add' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "sub") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x12);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x13);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'sub' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "mul") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x14);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x15);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'mul' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "div") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x16);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x17);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'div' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "not") == 0) {
+			if (tokens[i + 1].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x18);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				i += 2;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x19);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'not' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "and") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x20);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x21);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'and' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "or") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x22);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x23);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'or' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "xor") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x24);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x25);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'xor' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
 			exit(1);
 		}
 	}
 
-	fwrite(bytecode.bytecode, 1, bytecode.bytecodeLength, fp);
+	if (!error) {
+		fwrite(bytecode.bytecode, 1, bytecode.bytecodeLength, fp);
+	}
+
 	fclose(fp);
-	return;
+	return error;
 }
 
-void cca_assemble(char* fileName) {
+char cca_assemble(char* fileName) {
 	// optain the assembly code
 	cca_file_content content = ccvm_program_load(fileName);
 	
@@ -388,16 +532,21 @@ void cca_assemble(char* fileName) {
 	// recognise opcodes
 	cca_assembler_recognize(tokens);
 
-	// generate bytecode
-	cca_assembler_bytegeneration(tokens);
-
-	int i = 0;
-	/*while(tokens[i].type != 6) {
+	/*int i = 0;
+	while(tokens[i].type != 6) {
 		cca_token_print(tokens[i++]);
 	}*/
 
+	// generate bytecode
+	if (cca_assembler_bytegeneration(tokens)) {
+		free(tokens);
+		free(content.content);
+		return 0;
+	}
+
 	free(tokens);
 	free(content.content);
+	return 1;
 }
 
 #endif
