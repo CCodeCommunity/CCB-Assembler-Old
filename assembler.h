@@ -28,6 +28,7 @@ char* cca_token_type_str(char type) {
 		case 5: return "label";
 		case 6: return "end";
 		case 7: return "address";
+		case 8: return "string";
 		default: return "unknown";
 	}
 }
@@ -94,6 +95,10 @@ char cca_is_address(char character) {
 
 char cca_is_comment(char character) {
 	return character == ';';
+}
+
+char cca_is_string(char character) {
+	return character == '\'' || character == '"' || character == '`';
 }
 
 // parse functions
@@ -167,6 +172,30 @@ void cca_parse_comment(char* code, unsigned int* readingPos) {
 	}
 }
 
+cca_token cca_parse_string(char* code, unsigned int* readingPos) {
+	cca_token tok;
+	tok.type = 8;
+	unsigned int stringCap = 100;
+	unsigned int stringLen = 1;
+	char* string = malloc(stringCap * sizeof(char));
+	string[0] = code[*readingPos];
+	++*readingPos;
+	
+	while(code[*readingPos - 1] != string[0] || stringLen == 1) {
+		++stringLen;
+
+		if (stringLen >= stringCap) {
+			stringCap *= 2;
+			string = realloc(string, stringCap * sizeof(char));
+		}
+
+		string[stringLen-1] = code[*readingPos];
+		++*readingPos;
+	}
+
+	tok.value.string = string;
+	return tok;
+}
 
 cca_token* cca_assembler_lex(cca_file_content content) {
 	// file data
@@ -219,6 +248,14 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 				tokens = realloc(tokens, tokCapacity);
 			}
 			tokens[tokCount - 1] = newTok;
+		} else if (cca_is_string(current)) {
+			cca_token newTok = cca_parse_string(assembly, &readingPos);
+			++tokCount;
+			if (tokCount >= tokCapacity) {
+				tokCapacity *= 2;
+				tokens = realloc(tokens, tokCapacity);
+			}
+			tokens[tokCount - 1] = newTok;
 		} else if (cca_is_comment(current)) {
 			cca_parse_comment(assembly, &readingPos);
 		} else {
@@ -258,14 +295,51 @@ void cca_assembler_recognize(cca_token* tokens) {
 				tokens[i].type = 3;
 			}
 
-			if (strcmp(tokens[i].value.string, "a") == 0 || strcmp(tokens[i].value.string, "b") == 0 || strcmp(tokens[i].value.string, "c") == 0 || strcmp(tokens[i].value.string, "d") == 0) {
+			else if (strcmp(tokens[i].value.string, "a") == 0 || strcmp(tokens[i].value.string, "b") == 0 || strcmp(tokens[i].value.string, "c") == 0 || strcmp(tokens[i].value.string, "d") == 0) {
 				tokens[i].type = 4;
 			}
 		}
-
 		++i;
 	}
 	return;
+}
+
+void cca_assembler_define_parser(cca_token** tokens) {
+	unsigned int tokCapacity = 100;
+	unsigned int tokCount = 0;
+	unsigned int readingPosition = 0;
+	cca_token* newTokens = malloc(tokCapacity * sizeof(cca_token));
+	
+	while ((*tokens)[readingPosition].type != 6) {
+		// check if define
+		if ((*tokens)[readingPosition].type == 0 && strcmp((*tokens)[readingPosition].value.string, "def") == 0) {
+			printf("defining %s as %s\n", (*tokens)[readingPosition+1].value.string, (*tokens)[readingPosition+2].value.string);
+			readingPosition += 3;
+			continue;
+		}
+
+		// add the token
+		++tokCount;
+		if (tokCount >= tokCapacity) {
+			tokCapacity *= 2;
+			newTokens = realloc(newTokens, tokCapacity * sizeof(cca_token));
+		}
+
+		newTokens[tokCount - 1] = (*tokens)[readingPosition++];
+	}
+
+	++tokCount;
+
+	if (tokCount >= tokCapacity) {
+		tokCapacity *= 2;
+		newTokens = realloc(newTokens, tokCapacity * sizeof(cca_token));
+	}
+
+	newTokens[tokCount - 1] = (*tokens)[readingPosition++];
+
+	//cca_token* toBeDestroyed = tokens;
+	*tokens = newTokens;
+	//free(toBeDestroyed);
 }
 
 typedef struct cca_bytecode {
@@ -539,17 +613,10 @@ char cca_assembler_bytegeneration(cca_token* tokens) {
 				i += 1;
 			}
 		} else if (strcmp(tokens[i].value.string, "syscall") == 0) {
-			if (tokens[i + 1].type == 4) {
-				cca_bytecode_add_byte(&bytecode, 0x51);
-				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
-				i += 2;
-			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
-				cca_bytecode_add_byte(&bytecode, 0x53);
-				i += 1;
+			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+
 			} else {
-				puts("[ERROR] on 'syscall' instruction, illegal combination of operands");
-				error = 1;
-				i += 1;
+
 			}
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
@@ -575,10 +642,15 @@ char cca_assemble(char* fileName) {
 	// recognise opcodes
 	cca_assembler_recognize(tokens);
 
-	/*int i = 0;
+	// get rid and parse the defines
+	cca_assembler_define_parser(&tokens);
+
+	int i = 0;
 	while(tokens[i].type != 6) {
 		cca_token_print(tokens[i++]);
-	}*/
+	}
+
+	exit(1);
 
 	// generate bytecode
 	if (cca_assembler_bytegeneration(tokens)) {
