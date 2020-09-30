@@ -161,6 +161,12 @@ cca_token cca_parse_address(char* code, unsigned int* readingPos) {
 	return tok;
 }
 
+void cca_parse_comment(char* code, unsigned int* readingPos) {
+	while(code[*readingPos] != '\n') {
+		++*readingPos;
+	}
+}
+
 
 cca_token* cca_assembler_lex(cca_file_content content) {
 	// file data
@@ -178,7 +184,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 		char current = assembly[readingPos];
 		
 		if (cca_is_ignorable(current)) {
-
+			// ignore it and continue to next itteration
 		} else if (cca_is_divider(current)) {
 			cca_token newTok;
 			newTok.type = 2;
@@ -214,10 +220,8 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			}
 			tokens[tokCount - 1] = newTok;
 		} else if (cca_is_comment(current)) {
-			puts("[INFO] found comment");
-		}
-
-		else {
+			cca_parse_comment(assembly, &readingPos);
+		} else {
 			printf("[ERROR] unknown syntax: %c\n", current);
 			exit(1);
 		}
