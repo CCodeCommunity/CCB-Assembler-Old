@@ -512,6 +512,45 @@ char cca_assembler_bytegeneration(cca_token* tokens) {
 				error = 1;
 				i += 1;
 			}
+		} else if (strcmp(tokens[i].value.string, "inc") == 0) {
+			if (tokens[i + 1].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x50);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				i += 2;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x52);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'inc' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "dec") == 0) {
+			if (tokens[i + 1].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x51);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				i += 2;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x53);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'dec' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "syscall") == 0) {
+			if (tokens[i + 1].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x51);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				i += 2;
+			} else if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x53);
+				i += 1;
+			} else {
+				puts("[ERROR] on 'syscall' instruction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
 			exit(1);
