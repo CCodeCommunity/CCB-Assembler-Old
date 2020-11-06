@@ -54,17 +54,14 @@ cca_file_content ccvm_program_load(char *filename) {
     }
 
     // get buffer size
-    fseek(fp, 0, SEEK_END);
+    fseek(fp, 0L, SEEK_END);
     size_t size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    fseek(fp, 0L, SEEK_SET);
 
     // buffer allocation
     char *buffer = (char *) malloc(size);
 
-    if(fread(buffer, sizeof *buffer, size, fp) != size) {
-        printf("[ERROR] while reading file: %s\n", filename);
-        exit(1);
-    }
+    fread(buffer, 1, size, fp);
 
     content.fileSize = size;
     content.content = buffer;
@@ -78,7 +75,7 @@ char cca_is_identifier(char character) {
 }
 
 char cca_is_number(char character) {
-	return isnumber(character);
+	return isdigit(character);
 }
 
 char cca_is_ignorable(char character) {
@@ -211,7 +208,11 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	// first lexing loop
 	while(readingPos < size) {
 		char current = assembly[readingPos];
-		
+
+		if (current == 0x00) {
+			break;
+		}
+
 		if (cca_is_ignorable(current)) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_divider(current)) {
@@ -649,8 +650,6 @@ char cca_assemble(char* fileName) {
 	while(tokens[i].type != 6) {
 		cca_token_print(tokens[i++]);
 	}
-
-	exit(1);
 
 	// generate bytecode
 	if (cca_assembler_bytegeneration(tokens)) {
