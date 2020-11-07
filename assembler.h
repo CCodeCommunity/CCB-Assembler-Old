@@ -98,6 +98,10 @@ char cca_is_string(char character) {
 	return character == '\'' || character == '"' || character == '`';
 }
 
+char cca_is_marker(char character) {
+	return character == ':';
+}
+
 // parse functions
 cca_token cca_parse_identifier(char* code, unsigned int* readingPos) {
 	cca_token tok;
@@ -154,7 +158,7 @@ cca_token cca_parse_address(char* code, unsigned int* readingPos) {
 
 	++*readingPos;
 	while(cca_is_number(code[*readingPos])) {
-		n = n*10 + code[*readingPos] - 48;
+		n = n * 10 + code[*readingPos] - 48;
 		++*readingPos;
 	}
 
@@ -167,6 +171,21 @@ void cca_parse_comment(char* code, unsigned int* readingPos) {
 	while(code[*readingPos] != '\n') {
 		++*readingPos;
 	}
+}
+
+void cca_parse_marker(char* code, unsigned int* readingPos) {
+	unsigned int n = 0;
+
+	cca_token tok;
+	tok.type = 5;
+
+	while(!cca_is_ignorable(code[*readingPos])) {
+		n = n * 10 + code[*readingPos] - 48;
+		++*readingPos;	
+	}
+
+	printf("test: %c", code[*readingPos]);
+	exit(0);
 }
 
 cca_token cca_parse_string(char* code, unsigned int* readingPos) {
@@ -209,12 +228,16 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	while(readingPos < size) {
 		char current = assembly[readingPos];
 
+		// printf("char = %c\n", current);
+
 		if (current == 0x00) {
 			break;
 		}
 
 		if (cca_is_ignorable(current)) {
 			// ignore it and continue to next itteration
+		} else if (cca_is_marker(current)) {
+			cca_parse_marker(assembly, &readingPos);
 		} else if (cca_is_divider(current)) {
 			cca_token newTok;
 			newTok.type = 2;
