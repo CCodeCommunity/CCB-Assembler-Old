@@ -104,7 +104,7 @@ char cca_is_marker(char character) {
 
 // parse functions
 cca_token cca_parse_identifier(char* code, unsigned int* readingPos) {
-	cca_token tok;
+	cca_token tok = {0};
 	tok.type = 0;
 
 	unsigned int stringCap = 100;
@@ -125,8 +125,7 @@ cca_token cca_parse_identifier(char* code, unsigned int* readingPos) {
 	}
 
 	--*readingPos;
-	string = realloc(string, stringLen+1 * sizeof(char));
-
+	string = realloc(string, stringLen * sizeof(char));
 	string[stringLen] = '\0';
 
 	tok.value.string = string;
@@ -137,7 +136,7 @@ cca_token cca_parse_identifier(char* code, unsigned int* readingPos) {
 cca_token cca_parse_number(char* code, unsigned int* readingPos) {
 	unsigned int n = 0;
 
-	cca_token tok;
+	cca_token tok = {0};
 	tok.type = 1;
 
 	while(cca_is_number(code[*readingPos])) {
@@ -153,7 +152,7 @@ cca_token cca_parse_number(char* code, unsigned int* readingPos) {
 cca_token cca_parse_address(char* code, unsigned int* readingPos) {
 	unsigned int n = 0;
 
-	cca_token tok;
+	cca_token tok = {0};
 	tok.type = 7;
 
 	++*readingPos;
@@ -173,23 +172,39 @@ void cca_parse_comment(char* code, unsigned int* readingPos) {
 	}
 }
 
-void cca_parse_marker(char* code, unsigned int* readingPos) {
-	unsigned int n = 0;
-
-	cca_token tok;
+cca_token cca_parse_marker(char* code, unsigned int* readingPos) {
+	cca_token tok = {0};
 	tok.type = 5;
 
-	while(!cca_is_ignorable(code[*readingPos])) {
-		n = n * 10 + code[*readingPos] - 48;
-		++*readingPos;	
+	unsigned int stringCap = 100;
+	unsigned int stringLen = 0;
+
+	char* string = malloc(stringCap * sizeof(char));
+	++*readingPos;
+	while(cca_is_identifier(code[*readingPos])) {
+		++stringLen;
+
+		if (stringLen >= stringCap) {
+			stringCap *= 2;
+			string = realloc(string, stringCap * sizeof(char));
+		}
+
+		string[stringLen-1] = code[*readingPos];
+
+		++*readingPos;
 	}
 
-	printf("test: %c", code[*readingPos]);
-	exit(0);
+	--*readingPos;
+	string = realloc(string, stringLen * sizeof(char));
+	string[stringLen] = '\0';
+
+	tok.value.string = string;
+
+	return tok;
 }
 
 cca_token cca_parse_string(char* code, unsigned int* readingPos) {
-	cca_token tok;
+	cca_token tok = {0};
 	tok.type = 8;
 	unsigned int stringCap = 100;
 	unsigned int stringLen = 1;
@@ -222,6 +237,8 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	unsigned int readingPos = 0;
 	unsigned int tokCapacity = 100;
 	unsigned int tokCount = 0;
+	unsigned int byteIndex = 0;
+
 	cca_token* tokens = malloc(tokCapacity * sizeof(cca_token));
 	
 	// first lexing loop
@@ -237,9 +254,15 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 		if (cca_is_ignorable(current)) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
-			cca_parse_marker(assembly, &readingPos);
+			cca_token newTok = cca_parse_marker(assembly, &readingPos);
+			++tokCount;
+			if (tokCount >= tokCapacity) {
+				tokCapacity *= 2;
+				tokens = realloc(tokens, tokCapacity);
+			}
+			tokens[tokCount - 1] = newTok;
 		} else if (cca_is_divider(current)) {
-			cca_token newTok;
+			cca_token newTok = {0};
 			newTok.type = 2;
 			newTok.value.string = ",";
 			++tokCount;
@@ -256,6 +279,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 				tokens = realloc(tokens, tokCapacity);
 			}
 			tokens[tokCount - 1] = newTok;
+			byteIndex += 1;
 		} else if (cca_is_number(current)) {
 			cca_token newTok = cca_parse_number(assembly, &readingPos);
 			++tokCount;
@@ -264,6 +288,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 				tokens = realloc(tokens, tokCapacity);
 			}
 			tokens[tokCount - 1] = newTok;
+			byteIndex += 4;
 		} else if (cca_is_address(current)){
 			cca_token newTok = cca_parse_address(assembly, &readingPos);
 			++tokCount;
@@ -272,6 +297,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 				tokens = realloc(tokens, tokCapacity);
 			}
 			tokens[tokCount - 1] = newTok;
+			byteIndex += 4;
 		} else if (cca_is_string(current)) {
 			cca_token newTok = cca_parse_string(assembly, &readingPos);
 			++tokCount;

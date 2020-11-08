@@ -1,4 +1,3 @@
-
 :main
 mov a, 0
 mov b, 5
