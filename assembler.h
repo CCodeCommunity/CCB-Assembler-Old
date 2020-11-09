@@ -18,6 +18,11 @@ typedef struct cca_token {
 	} value;
 } cca_token;
 
+typedef struct cca_marker {
+	char* name;
+	unsigned int marks;
+} cca_marker;
+
 char* cca_token_type_str(char type) {
 	switch (type) {
 		case 0: return "identifier";
@@ -59,7 +64,7 @@ cca_file_content ccvm_program_load(char *filename) {
     fseek(fp, 0L, SEEK_SET);
 
     // buffer allocation
-    char *buffer = (char *) malloc(size);
+    char *buffer = (char *) malloc(size + 1);
 
     fread(buffer, 1, size, fp);
 
@@ -172,9 +177,8 @@ void cca_parse_comment(char* code, unsigned int* readingPos) {
 	}
 }
 
-cca_token cca_parse_marker(char* code, unsigned int* readingPos) {
-	cca_token tok = {0};
-	tok.type = 5;
+cca_marker cca_parse_marker(char* code, unsigned int* readingPos) {
+	cca_marker mark = {0};
 
 	unsigned int stringCap = 100;
 	unsigned int stringLen = 0;
@@ -198,9 +202,9 @@ cca_token cca_parse_marker(char* code, unsigned int* readingPos) {
 	string = realloc(string, stringLen * sizeof(char));
 	string[stringLen] = '\0';
 
-	tok.value.string = string;
+	mark.name = string;
 
-	return tok;
+	return mark;
 }
 
 cca_token cca_parse_string(char* code, unsigned int* readingPos) {
@@ -232,35 +236,35 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	// file data
 	unsigned int size = content.fileSize;
 	char* assembly = content.content;
-
-	// lex data
-	unsigned int readingPos = 0;
-	unsigned int tokCapacity = 100;
-	unsigned int tokCount = 0;
 	unsigned int byteIndex = 0;
 
+	// markers
+	unsigned int markerCapacity = 100;
+	cca_marker* markers = malloc(markerCapacity * sizeof(cca_marker));
+	unsigned int markerCount = 0;
+
+	// tokens
+	unsigned int tokCapacity = 100;
 	cca_token* tokens = malloc(tokCapacity * sizeof(cca_token));
-	
+	unsigned int readingPos = 0;
+	unsigned int tokCount = 0;
+
 	// first lexing loop
-	while(readingPos < size) {
+	while(readingPos < size - 2) {
 		char current = assembly[readingPos];
 
-		// printf("char = %c\n", current);
-
-		if (current == 0x00) {
-			break;
-		}
+		printf("STEP %c\n", current);
 
 		if (cca_is_ignorable(current)) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
-			cca_token newTok = cca_parse_marker(assembly, &readingPos);
-			++tokCount;
-			if (tokCount >= tokCapacity) {
-				tokCapacity *= 2;
-				tokens = realloc(tokens, tokCapacity);
+			cca_marker newMarker = cca_parse_marker(assembly, &readingPos);
+			++markerCount;
+			if (markerCount >= markerCapacity) {
+				markerCapacity *= 2;
+				markers = realloc(markers, markerCapacity);
 			}
-			tokens[tokCount - 1] = newTok;
+			markers[markerCount - 1] = newMarker;
 		} else if (cca_is_divider(current)) {
 			cca_token newTok = {0};
 			newTok.type = 2;
@@ -312,11 +316,21 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			printf("[ERROR] unknown syntax: %c\n", current);
 			exit(1);
 		}
+
 		++readingPos;
 	}
 
+	// shrink marker array
+	markers = realloc(markers, markerCount * sizeof(cca_token));
+
+	puts("markers:");
+
+	for (int i = 0; i < markerCount; i++) {
+		printf("\t%s = %hu\n", markers[i].name, markers[i].marks);
+	}
+
 	// shrink tokens array
-	tokens = realloc(tokens, (tokCount+1) * sizeof(cca_token));
+	tokens = realloc(tokens, (tokCount + 1) * sizeof(cca_token));
 	cca_token end;
 	end.type = 6;
 	tokens[tokCount] = end;
