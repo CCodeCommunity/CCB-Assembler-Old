@@ -23,6 +23,16 @@ typedef struct cca_marker {
 	unsigned int marks;
 } cca_marker;
 
+typedef struct cca_definition {
+	char* name;
+	char* value;
+} cca_definition;
+
+typedef struct cca_definition_list {
+	cca_definition* definitions;
+	unsigned int length;
+} cca_definition_list;
+
 char* cca_token_type_str(char type) {
 	switch (type) {
 		case 0: return "identifier";
@@ -228,6 +238,9 @@ cca_token cca_parse_string(char* code, unsigned int* readingPos) {
 		++*readingPos;
 	}
 
+	string = realloc(string, stringLen * sizeof(char));
+	string[stringLen] = '\0';
+
 	tok.value.string = string;
 	return tok;
 }
@@ -383,19 +396,36 @@ void cca_assembler_recognize(cca_token* tokens) {
 	return;
 }
 
-void cca_assembler_define_parser(cca_token** tokens) {
+cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
 	unsigned int tokCapacity = 100;
 	unsigned int tokCount = 0;
 	unsigned int readingPosition = 0;
 	cca_token* newTokens = malloc(tokCapacity * sizeof(cca_token));
-	
+
+	unsigned int definitionCapacity = 100;
+	unsigned int definitionLength = 0;
+	cca_definition* definitions = malloc(definitionCapacity * sizeof(cca_definition*));
+
 	while ((*tokens)[readingPosition].type != 6) {
 		// check if define
-		if ((*tokens)[readingPosition].type == 0 && strcmp((*tokens)[readingPosition].value.string, "def") == 0) {
-			printf("defining %s as %s\n", (*tokens)[readingPosition+1].value.string, (*tokens)[readingPosition+2].value.string);
+		if ((*tokens)[readingPosition].type == 0 && strcmp((*tokens)[readingPosition].value.string, "def") == 0) {			
+			cca_definition def = {
+				.name=(*tokens)[readingPosition+1].value.string,
+				.value=(*tokens)[readingPosition+2].value.string
+			};
+
+			if (definitionLength >= definitionCapacity) {
+				definitionCapacity *= 2;
+				cca_definition* definitions = realloc(definitions, definitionCapacity * sizeof(cca_definition*));
+			}
+
+			definitions[definitionLength++] = def;
+			
 			readingPosition += 3;
 			continue;
 		}
+
+		cca_definition* definitions = realloc(definitions, (definitionLength + 1) * sizeof(cca_definition*));
 
 		// add the token
 		++tokCount;
@@ -419,6 +449,13 @@ void cca_assembler_define_parser(cca_token** tokens) {
 	//cca_token* toBeDestroyed = tokens;
 	*tokens = newTokens;
 	//free(toBeDestroyed);
+
+	cca_definition_list definitionList = {
+		.definitions = definitions,
+		.length = definitionLength
+	};
+
+	return definitionList;
 }
 
 typedef struct cca_bytecode {
@@ -461,14 +498,22 @@ void cca_bytecode_add_uint(cca_bytecode* bytecode, unsigned int n) {
 	bytecode->bytecode[bytecode->bytecodeLength - 1] = n & 0xff;
 }
 
-char cca_assembler_bytegeneration(cca_token* tokens) {
-
+char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
+	puts("aaa");
 	FILE* fp = fopen("test.ccb", "wb+");
+
+	puts("bbb");
 
 	cca_bytecode bytecode;
 	bytecode.bytecodeCapacity = 100;
 	bytecode.bytecodeLength = 0;
 	bytecode.bytecode = malloc(bytecode.bytecodeCapacity);
+
+	printf("the length is %d\n", defs.length);
+
+	for (int i = 0; i < defs.length; i++) {
+		printf("thingy = %s\n", defs.definitions[i].value);
+	}
 
 	cca_bytecode_add_uint(&bytecode, 0x1d1d1d1d);
 
@@ -723,9 +768,14 @@ char cca_assemble(char* fileName) {
 	// recognise opcodes
 	cca_assembler_recognize(tokens);
 
-	// get rid and parse the defines
-	cca_assembler_define_parser(&tokens);
+	int i = 0;
+	while(tokens[i].type != 6) {
+		cca_token_print(tokens[i++]);
+	}
 
+	// get rid and parse the defines
+	cca_definition_list defs = cca_assembler_define_parser(&tokens);
+	
 	/*
 	int i = 0;
 	while(tokens[i].type != 6) {
@@ -734,7 +784,7 @@ char cca_assemble(char* fileName) {
 	*/
 
 	// generate bytecode
-	if (cca_assembler_bytegeneration(tokens)) {
+	if (cca_assembler_bytegeneration(tokens, defs)) {
 		free(tokens);
 		free(content.content);
 		return 0;

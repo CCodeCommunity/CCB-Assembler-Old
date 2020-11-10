@@ -1,0 +1,9 @@
+def hw "hello world"
+def another "test"
+def test "this is a test"
+
+mov a, 5
+:main
+mov a, 0
+syscall
+stp
