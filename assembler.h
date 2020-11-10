@@ -253,7 +253,9 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	while(readingPos < size - 2) {
 		char current = assembly[readingPos];
 
-		printf("STEP %c\n", current);
+		if (current == 0x00) {
+			break;
+		}
 
 		if (cca_is_ignorable(current)) {
 			// ignore it and continue to next itteration
@@ -334,7 +336,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	cca_token end;
 	end.type = 6;
 	tokens[tokCount] = end;
-
+	
 	return tokens;
 }
 
@@ -678,10 +680,12 @@ char cca_assembler_bytegeneration(cca_token* tokens) {
 			}
 		} else if (strcmp(tokens[i].value.string, "syscall") == 0) {
 			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
-
+				cca_bytecode_add_byte(&bytecode, 0xff);
 			} else {
-
+				puts("[ERROR] on 'syscall' instuction, illegal combination of operands");
 			}
+
+			i += 1;
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
 			exit(1);
