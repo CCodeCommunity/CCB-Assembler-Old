@@ -261,6 +261,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
 			cca_marker newMarker = cca_parse_marker(assembly, &readingPos);
+			newMarker.marks = byteIndex;
 			++markerCount;
 			if (markerCount >= markerCapacity) {
 				markerCapacity *= 2;
@@ -325,17 +326,29 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	// shrink marker array
 	markers = realloc(markers, markerCount * sizeof(cca_token));
 
-	puts("markers:");
-
-	for (int i = 0; i < markerCount; i++) {
-		printf("\t%s = %hu\n", markers[i].name, markers[i].marks);
-	}
-
 	// shrink tokens array
 	tokens = realloc(tokens, (tokCount + 1) * sizeof(cca_token));
 	cca_token end;
 	end.type = 6;
 	tokens[tokCount] = end;
+
+	puts("markers:");
+
+	for (int i = 0; i < markerCount; i++) {
+		printf("\t%s = %hu\n", markers[i].name, markers[i].marks);
+
+		int j = 0;
+		while(tokens[j].type != 6) {
+			if (tokens[j].type == 0) {
+				if (strcmp(tokens[j].value.string, markers[i].name) == 0) {
+					tokens[j].type = 1;
+					tokens[j].value.numeric = markers[i].marks;
+				}
+			}
+
+			++j;
+		}
+	}
 	
 	return tokens;
 }
@@ -713,10 +726,12 @@ char cca_assemble(char* fileName) {
 	// get rid and parse the defines
 	cca_assembler_define_parser(&tokens);
 
+	/*
 	int i = 0;
 	while(tokens[i].type != 6) {
 		cca_token_print(tokens[i++]);
 	}
+	*/
 
 	// generate bytecode
 	if (cca_assembler_bytegeneration(tokens)) {
