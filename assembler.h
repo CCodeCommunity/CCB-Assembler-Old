@@ -517,9 +517,9 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 	while(tokens[i].type != 6) {
 		if (tokens[i].type != 3) {
 			if (tokens[i].type == 1 || tokens[i].type == 7)
-				printf("[ERROR] unexpected token: %d\n", tokens[i].value.numeric);
+				printf("[ERROR] unexpected token: %d. while generating bytecode\n", tokens[i].value.numeric);
 			else
-				printf("[ERROR] unexpected token: %s\n", tokens[i].value.string);
+				printf("[ERROR] unexpected token: %s. while generating bytecode\n", tokens[i].value.string);
 			i += 1;
 			error = 1;
 		} else if (strcmp(tokens[i].value.string, "stp") == 0) {
@@ -764,6 +764,24 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 			}
 
 			i += 2;
+		} else if (strcmp(tokens[i].value.string, "cmp") == 0) {
+			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+				cca_bytecode_add_byte(&bytecode, 0x30);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+				i += 4;
+			} else if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
+				cca_bytecode_add_byte(&bytecode, 0x31);
+				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+				i += 4;
+			} else if (tokens[i + 1].type == 1 && (tokens[i + 2].type == 3 || tokens[i + 2].type == 6)) {
+				cca_bytecode_add_byte(&bytecode, 0x32);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'cmp' instuction, illegal combination of operands");
+			}
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
 			exit(1);
