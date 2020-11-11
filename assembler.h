@@ -60,7 +60,7 @@ cca_file_content ccvm_program_load(char *filename) {
     cca_file_content content;
 
     // open file
-    FILE *fp = fopen(filename, "r");
+    FILE *fp = fopen(filename, "rb");
 
     // error detection
     if (fp == NULL) {
@@ -74,7 +74,7 @@ cca_file_content ccvm_program_load(char *filename) {
     fseek(fp, 0L, SEEK_SET);
 
     // buffer allocation
-    char *buffer = (char *) malloc(size + 1);
+    char *buffer = (char *) malloc(size + 1 * sizeof(char*));
 
     fread(buffer, 1, size, fp);
 
@@ -94,7 +94,7 @@ char cca_is_number(char character) {
 }
 
 char cca_is_ignorable(char character) {
-	return (character == ' ' || character == '\n' || character == '\t');
+	return (character == ' ' || character == '\n' || character == '\t' || character == '\r');
 }
 
 char cca_is_divider(char character) {
@@ -264,12 +264,11 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	unsigned int tokCount = 0;
 
 	// first lexing loop
-	while(readingPos < size - 2) {
+	while(readingPos < size - 1) {
 		char current = assembly[readingPos];
 
-		if (current == 0x00) {
+		if (current == 0x00)
 			break;
-		}
 
 		if (cca_is_ignorable(current)) {
 			// ignore it and continue to next itteration

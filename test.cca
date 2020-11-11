@@ -1,9 +1,5 @@
-def hw "hello world"
-def another "test"
-def test "this is a test"
-
-mov a, 5
-:main
 mov a, 0
-syscall
+mov b, 5
+mov c, 10
+mov d, 15
 stp
