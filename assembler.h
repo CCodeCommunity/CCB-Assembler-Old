@@ -256,6 +256,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	unsigned int markerCapacity = 100;
 	cca_marker* markers = malloc(markerCapacity * sizeof(cca_marker));
 	unsigned int markerCount = 0;
+	BOOL justMarked = 0;
 
 	// tokens
 	unsigned int tokCapacity = 100;
@@ -274,13 +275,14 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
 			cca_marker newMarker = cca_parse_marker(assembly, &readingPos);
-			newMarker.marks = byteIndex;
+			newMarker.marks = 15;
 			++markerCount;
 			if (markerCount >= markerCapacity) {
 				markerCapacity *= 2;
 				markers = realloc(markers, markerCapacity);
 			}
 			markers[markerCount - 1] = newMarker;
+			justMarked = 2;
 		} else if (cca_is_divider(current)) {
 			cca_token newTok = {0};
 			newTok.type = 2;
@@ -331,6 +333,11 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 		} else {
 			printf("[ERROR] unknown syntax: %c\n", current);
 			exit(1);
+		}
+
+		if (justMarked) {
+			justMarked = FALSE;
+			markers[markerCount - 1].marks = byteIndex;
 		}
 
 		++readingPos;
@@ -748,6 +755,15 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 			}
 
 			i += 1;
+		} else if (strcmp(tokens[i].value.string, "call") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x60);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+			} else {
+				error = 1;
+				puts("[ERROR] on 'call' instuction, illegal combination of operands");
+			}
+			i += 2;
 		} else if (strcmp(tokens[i].value.string, "ret") == 0) {
 			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
 				cca_bytecode_add_byte(&bytecode, 0x61);
@@ -755,17 +771,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 				error = 1;
 				puts("[ERROR] on 'ret' instuction, illegal combination of operands");
 			}
-
 			i += 1;
-		} else if (strcmp(tokens[i].value.string, "call") == 0) {
-			if (tokens[i + 1].type == 7) {
-				cca_bytecode_add_byte(&bytecode, 0x61);
-				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
-			} else {
-				error = 1;
-				puts("[ERROR] on 'call' instuction, illegal combination of operands");
-			}
-			i += 2;
 		} else if (strcmp(tokens[i].value.string, "cmp") == 0) {
 			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
 				cca_bytecode_add_byte(&bytecode, 0x30);

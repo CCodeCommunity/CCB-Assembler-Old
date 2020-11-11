@@ -1,5 +1,11 @@
-mov a, 0
-mov b, 5
-mov c, 10
-mov d, 15
+jmp main
+
+:addOneToRegisterA
+    mov b, 1
+    add a, b
+ret
+
+:main
+    mov a, 10
+    call addOneToRegisterA
 stp
