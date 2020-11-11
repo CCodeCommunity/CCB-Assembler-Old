@@ -346,16 +346,12 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	end.type = 6;
 	tokens[tokCount] = end;
 
-	puts("markers:");
-
 	for (int i = 0; i < markerCount; i++) {
-		printf("\t%s = %u\n", markers[i].name, markers[i].marks);
-
 		int j = 0;
 		while(tokens[j].type != 6) {
 			if (tokens[j].type == 0) {
 				if (strcmp(tokens[j].value.string, markers[i].name) == 0) {
-					tokens[j].type = 1;
+					tokens[j].type = 7;
 					tokens[j].value.numeric = markers[i].marks;
 				}
 			}
@@ -743,6 +739,31 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 			}
 
 			i += 1;
+		} else if (strcmp(tokens[i].value.string, "frs") == 0) {
+			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x40);
+			} else {
+				puts("[ERROR] on 'syscall' instuction, illegal combination of operands");
+			}
+
+			i += 1;
+		} else if (strcmp(tokens[i].value.string, "ret") == 0) {
+			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+				cca_bytecode_add_byte(&bytecode, 0x61);
+			} else {
+				puts("[ERROR] on 'ret' instuction, illegal combination of operands");
+			}
+
+			i += 1;
+		} else if (strcmp(tokens[i].value.string, "call") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x61);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+			} else {
+				puts("[ERROR] on 'call' instuction, illegal combination of operands");
+			}
+
+			i += 2;
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
 			exit(1);
@@ -769,13 +790,6 @@ char cca_assemble(char* fileName) {
 
 	// get rid and parse the defines
 	cca_definition_list defs = cca_assembler_define_parser(&tokens);
-	
-	/*
-	int i = 0;
-	while(tokens[i].type != 6) {
-		cca_token_print(tokens[i++]);
-	}
-	*/
 
 	// generate bytecode
 	if (cca_assembler_bytegeneration(tokens, defs)) {
