@@ -223,10 +223,10 @@ cca_token cca_parse_string(char* code, unsigned int* readingPos) {
 	unsigned int stringCap = 100;
 	unsigned int stringLen = 1;
 	char* string = malloc(stringCap * sizeof(char));
-	string[0] = code[*readingPos];
+	char quote = code[*readingPos];
 	++*readingPos;
 	
-	while(code[*readingPos - 1] != string[0] || stringLen == 1) {
+	while(code[*readingPos] != quote) {
 		++stringLen;
 
 		if (stringLen >= stringCap) {
@@ -234,11 +234,12 @@ cca_token cca_parse_string(char* code, unsigned int* readingPos) {
 			string = realloc(string, stringCap * sizeof(char));
 		}
 
-		string[stringLen-1] = code[*readingPos];
+		string[stringLen-2] = code[*readingPos];
 		++*readingPos;
 	}
 
 	string = realloc(string, stringLen * sizeof(char));
+
 	string[stringLen] = '\0';
 
 	tok.value.string = string;
@@ -348,7 +349,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	puts("markers:");
 
 	for (int i = 0; i < markerCount; i++) {
-		printf("\t%s = %hu\n", markers[i].name, markers[i].marks);
+		printf("\t%s = %u\n", markers[i].name, markers[i].marks);
 
 		int j = 0;
 		while(tokens[j].type != 6) {
@@ -425,8 +426,6 @@ cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
 			continue;
 		}
 
-		cca_definition* definitions = realloc(definitions, (definitionLength + 1) * sizeof(cca_definition*));
-
 		// add the token
 		++tokCount;
 		if (tokCount >= tokCapacity) {
@@ -449,6 +448,8 @@ cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
 	//cca_token* toBeDestroyed = tokens;
 	*tokens = newTokens;
 	//free(toBeDestroyed);
+
+	definitions = realloc(definitions, (definitionLength) * sizeof(cca_definition));
 
 	cca_definition_list definitionList = {
 		.definitions = definitions,
@@ -499,20 +500,18 @@ void cca_bytecode_add_uint(cca_bytecode* bytecode, unsigned int n) {
 }
 
 char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
-	puts("aaa");
 	FILE* fp = fopen("test.ccb", "wb+");
-
-	puts("bbb");
 
 	cca_bytecode bytecode;
 	bytecode.bytecodeCapacity = 100;
 	bytecode.bytecodeLength = 0;
 	bytecode.bytecode = malloc(bytecode.bytecodeCapacity);
 
-	printf("the length is %d\n", defs.length);
-
 	for (int i = 0; i < defs.length; i++) {
-		printf("thingy = %s\n", defs.definitions[i].value);
+		char* bytes = defs.definitions[i].value;
+		for (int j = 0; bytes[j] != '\0'; j++) {
+			cca_bytecode_add_byte(&bytecode, bytes[j]);
+		}
 	}
 
 	cca_bytecode_add_uint(&bytecode, 0x1d1d1d1d);
@@ -767,11 +766,6 @@ char cca_assemble(char* fileName) {
 
 	// recognise opcodes
 	cca_assembler_recognize(tokens);
-
-	int i = 0;
-	while(tokens[i].type != 6) {
-		cca_token_print(tokens[i++]);
-	}
 
 	// get rid and parse the defines
 	cca_definition_list defs = cca_assembler_define_parser(&tokens);
