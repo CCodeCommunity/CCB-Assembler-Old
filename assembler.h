@@ -517,9 +517,9 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 	while(tokens[i].type != 6) {
 		if (tokens[i].type != 3) {
 			if (tokens[i].type == 1 || tokens[i].type == 7)
-				printf("[ERROR] unexpected token: %d. while generating bytecode\n", tokens[i].value.numeric);
+				printf("[ERROR] unexpected token: '%d' while generating bytecode\n", tokens[i].value.numeric);
 			else
-				printf("[ERROR] unexpected token: %s. while generating bytecode\n", tokens[i].value.string);
+				printf("[ERROR] unexpected token: '%s' while generating bytecode\n", tokens[i].value.string);
 			i += 1;
 			error = 1;
 		} else if (strcmp(tokens[i].value.string, "stp") == 0) {
@@ -735,6 +735,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
 				cca_bytecode_add_byte(&bytecode, 0xff);
 			} else {
+				error = 1;
 				puts("[ERROR] on 'syscall' instuction, illegal combination of operands");
 			}
 
@@ -743,6 +744,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
 				cca_bytecode_add_byte(&bytecode, 0x40);
 			} else {
+				error = 1;
 				puts("[ERROR] on 'syscall' instuction, illegal combination of operands");
 			}
 
@@ -751,6 +753,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
 				cca_bytecode_add_byte(&bytecode, 0x61);
 			} else {
+				error = 1;
 				puts("[ERROR] on 'ret' instuction, illegal combination of operands");
 			}
 
@@ -760,9 +763,9 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 				cca_bytecode_add_byte(&bytecode, 0x61);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 			} else {
+				error = 1;
 				puts("[ERROR] on 'call' instuction, illegal combination of operands");
 			}
-
 			i += 2;
 		} else if (strcmp(tokens[i].value.string, "cmp") == 0) {
 			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
@@ -781,6 +784,68 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 				i += 2;
 			} else {
 				puts("[ERROR] on 'cmp' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "jmp") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x20);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'jmp' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "je") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x33);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'je' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "jne") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x34);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'jne' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "jg") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x35);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'jg' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "js") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x36);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'js' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
+			}
+		} else if (strcmp(tokens[i].value.string, "jo") == 0) {
+			if (tokens[i + 1].type == 7) {
+				cca_bytecode_add_byte(&bytecode, 0x37);
+				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+				i += 2;
+			} else {
+				puts("[ERROR] on 'jo' instuction, illegal combination of operands");
+				error = 1;
+				i += 1;
 			}
 		} else {
 			printf("[ERROR] unknown opcode '%s'\n", tokens[i].value.string);
