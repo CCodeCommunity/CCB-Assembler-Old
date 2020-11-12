@@ -5,6 +5,16 @@
 #define TRUE 1
 #define FALSE 0
 
+#define CCA_TOK_IDENTIFIER 0
+#define CCA_TOK_NUMBER 1
+#define CCA_TOK_DIVIDER 2
+#define CCA_TOK_OPCODE 3
+#define CCA_TOK_REGISTER 4
+#define CCA_TOK_LABEL 5
+#define CCA_TOK_END 6
+#define CCA_TOK_ADDRESS 7
+#define CCA_TOK_STRING 8
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -30,6 +40,7 @@ typedef struct cca_marker {
 typedef struct cca_definition {
 	char* name;
 	char* value;
+	unsigned int pointer;
 } cca_definition;
 
 typedef struct cca_definition_list {
@@ -56,7 +67,7 @@ void cca_token_print(cca_token tok) {
 	if (tok.type == 1 || tok.type == 7) {
 		printf("Token[type: %s(%d), value: %d]\n", cca_token_type_str(tok.type), tok.type, tok.value.numeric);
 	} else {
-		printf("Token[type: %s(%d), value: %s]\n", cca_token_type_str(tok.type), tok.type, tok.value.string);
+		printf("Token[type: %s(%d), value: %s]\n", cca_token_type_str(tok.type), tok.type, tok.type == 6 ? "EOP" : tok.value.string);
 	}
 }
 
@@ -136,19 +147,19 @@ char cca_is_opcode_or_register(cca_token t) {
 	unsigned int mnemonicsCount = 27;
 
 	if (strContainedIn(t.value.string, mnemonics, mnemonicsCount))
-		return 3;
+		return CCA_TOK_OPCODE;
 
 	else if (strcmp(t.value.string, "a") == 0 || strcmp(t.value.string, "b") == 0 || strcmp(t.value.string, "c") == 0 || strcmp(t.value.string, "d") == 0)
-		return 4;
+		return CCA_TOK_REGISTER;
 		
 	else
-		return 0;
+		return CCA_TOK_IDENTIFIER;
 }
 
 // parse functions
 cca_token cca_parse_identifier(char* code, unsigned int* readingPos) {
 	cca_token tok = {0};
-	tok.type = 0;
+	tok.type = CCA_TOK_IDENTIFIER;
 
 	unsigned int stringCap = 100;
 	unsigned int stringLen = 0;
@@ -180,7 +191,7 @@ cca_token cca_parse_number(char* code, unsigned int* readingPos) {
 	unsigned int n = 0;
 
 	cca_token tok = {0};
-	tok.type = 1;
+	tok.type = CCA_TOK_NUMBER;
 
 	while(cca_is_number(code[*readingPos])) {
 		n = n*10 + code[*readingPos] - 48;
@@ -196,7 +207,7 @@ cca_token cca_parse_address(char* code, unsigned int* readingPos) {
 	unsigned int n = 0;
 
 	cca_token tok = {0};
-	tok.type = 7;
+	tok.type = CCA_TOK_ADDRESS;
 
 	++*readingPos;
 	while(cca_is_number(code[*readingPos])) {
@@ -311,7 +322,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			markers[markerCount - 1] = newMarker;
 		} else if (cca_is_divider(current)) {
 			cca_token newTok = {0};
-			newTok.type = 2;
+			newTok.type = CCA_TOK_DIVIDER;
 			newTok.value.string = ",";
 			++tokCount;
 			if (tokCount >= tokCapacity) {
@@ -330,7 +341,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 1;
 
-			if (newTok.type == 0)
+			if (newTok.type == CCA_TOK_IDENTIFIER)
 				byteIndex += 3;
 		} else if (cca_is_number(current)) {
 			cca_token newTok = cca_parse_number(assembly, &readingPos);
@@ -374,7 +385,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	// shrink tokens array
 	tokens = realloc(tokens, (tokCount + 1) * sizeof(cca_token));
 	cca_token end;
-	end.type = 6;
+	end.type = CCA_TOK_END;
 	tokens[tokCount] = end;
 
 	// marker replacement
@@ -406,13 +417,18 @@ cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
 	unsigned int definitionLength = 0;
 	cca_definition* definitions = malloc(definitionCapacity * sizeof(cca_definition*));
 
+	unsigned int totalHeaderLength = 0;
+
 	while ((*tokens)[readingPosition].type != 6) {
 		// check if define
 		if ((*tokens)[readingPosition].type == 0 && strcmp((*tokens)[readingPosition].value.string, "def") == 0) {			
 			cca_definition def = {
-				.name=(*tokens)[readingPosition+1].value.string,
-				.value=(*tokens)[readingPosition+2].value.string
+				.name = (*tokens)[readingPosition+1].value.string,
+				.value = (*tokens)[readingPosition+2].value.string,
+				.pointer = totalHeaderLength
 			};
+
+			totalHeaderLength += strlen((*tokens)[readingPosition+2].value.string);
 
 			if (definitionLength >= definitionCapacity) {
 				definitionCapacity *= 2;
@@ -456,6 +472,19 @@ cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
 	};
 
 	return definitionList;
+}
+
+void cca_assembler_replace_defs(cca_token** tokens, cca_definition_list defs) {
+	for (int i = 0; i < defs.length; i++) {
+		int j = 0;
+		while ((*tokens)[j].type != CCA_TOK_END) {
+			if ((*tokens)[j].type == CCA_TOK_IDENTIFIER) {
+				(*tokens)[j].type = CCA_TOK_ADDRESS;
+				(*tokens)[j].value.numeric = defs.definitions[i].pointer;
+			}
+			++j;
+		}
+	}
 }
 
 typedef struct cca_bytecode {
@@ -508,7 +537,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 
 	for (int i = 0; i < defs.length; i++) {
 		char* bytes = defs.definitions[i].value;
-		for (int j = 0; bytes[j] != '\0'; j++) {
+		for (int j = 0; bytes[j + 1] != '\0'; j++) {
 			cca_bytecode_add_byte(&bytecode, bytes[j]);
 		}
 	}
@@ -870,8 +899,16 @@ char cca_assemble(char* fileName) {
 	// lex the assembly code into tokens
 	cca_token* tokens = cca_assembler_lex(content);
 
-	// get rid and parse the defines
+	// parse the defines and get rid of them in the tokens
 	cca_definition_list defs = cca_assembler_define_parser(&tokens);
+
+	// replace all the unknown identifiers with their corresponding define pointer
+	cca_assembler_replace_defs(&tokens, defs);
+
+	int i = 0;
+	while (tokens[i++].type != 6) {
+		cca_token_print(tokens[i]);
+	}
 
 	// generate bytecode
 	if (cca_assembler_bytegeneration(tokens, defs)) {
