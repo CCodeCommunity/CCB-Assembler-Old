@@ -1,6 +1,10 @@
 #ifndef ccvm_assembler_assembler
 #define ccvm_assembler_assembler
 
+#define BOOL char
+#define TRUE 1
+#define FALSE 0
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -115,6 +119,30 @@ char cca_is_string(char character) {
 
 char cca_is_marker(char character) {
 	return character == ':';
+}
+
+char strContainedIn(char* string, char* array[], unsigned int arrayLength) {
+	for (int i = 0; i < arrayLength; i++) {
+		if (strcmp(string, array[i]) == 0) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+char cca_is_opcode_or_register(cca_token t) {
+	char* mnemonics[] = { "mov", "stp", "psh", "pop", "dup", "mov", "add", "sub", "mul", "div", "not", "and", "or", "xor", "jmp", "cmp", "frs", "inc", "dec", "call", "ret", "syscall", "je", "jne", "jg", "js", "jo" };
+	unsigned int mnemonicsCount = 27;
+
+	if (strContainedIn(t.value.string, mnemonics, mnemonicsCount))
+		return 3;
+
+	else if (strcmp(t.value.string, "a") == 0 || strcmp(t.value.string, "b") == 0 || strcmp(t.value.string, "c") == 0 || strcmp(t.value.string, "d") == 0)
+		return 4;
+		
+	else
+		return 0;
 }
 
 // parse functions
@@ -256,7 +284,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	unsigned int markerCapacity = 100;
 	cca_marker* markers = malloc(markerCapacity * sizeof(cca_marker));
 	unsigned int markerCount = 0;
-	BOOL justMarked = 0;
 
 	// tokens
 	unsigned int tokCapacity = 100;
@@ -275,14 +302,13 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
 			cca_marker newMarker = cca_parse_marker(assembly, &readingPos);
-			newMarker.marks = 15;
+			newMarker.marks = byteIndex;
 			++markerCount;
 			if (markerCount >= markerCapacity) {
 				markerCapacity *= 2;
 				markers = realloc(markers, markerCapacity);
 			}
 			markers[markerCount - 1] = newMarker;
-			justMarked = 2;
 		} else if (cca_is_divider(current)) {
 			cca_token newTok = {0};
 			newTok.type = 2;
@@ -295,6 +321,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			tokens[tokCount - 1] = newTok;
 		} else if (cca_is_identifier(current)){
 			cca_token newTok = cca_parse_identifier(assembly, &readingPos);
+			newTok.type = cca_is_opcode_or_register(newTok);
 			++tokCount;
 			if (tokCount >= tokCapacity) {
 				tokCapacity *= 2;
@@ -302,6 +329,9 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			}
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 1;
+
+			if (newTok.type == 0)
+				byteIndex += 3;
 		} else if (cca_is_number(current)) {
 			cca_token newTok = cca_parse_number(assembly, &readingPos);
 			++tokCount;
@@ -335,11 +365,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			exit(1);
 		}
 
-		if (justMarked) {
-			justMarked = FALSE;
-			markers[markerCount - 1].marks = byteIndex;
-		}
-
 		++readingPos;
 	}
 
@@ -352,8 +377,10 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	end.type = 6;
 	tokens[tokCount] = end;
 
+	// marker replacement
 	for (int i = 0; i < markerCount; i++) {
 		int j = 0;
+		printf(":%s @ %d\n", markers[i].name, markers[i].marks);
 		while(tokens[j].type != 6) {
 			if (tokens[j].type == 0) {
 				if (strcmp(tokens[j].value.string, markers[i].name) == 0) {
@@ -367,36 +394,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	}
 	
 	return tokens;
-}
-
-char strContainedIn(char* string, char* array[], unsigned int arrayLength) {
-	for (int i = 0; i < arrayLength; i++) {
-		if (strcmp(string, array[i]) == 0) {
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-void cca_assembler_recognize(cca_token* tokens) {
-	char* mnemonics[] = { "mov", "stp", "psh", "pop", "dup", "mov", "add", "sub", "mul", "div", "not", "and", "or", "xor", "jmp", "cmp", "frs", "inc", "dec", "call", "ret", "syscall", "je", "jne", "jg", "js", "jo" };
-	unsigned int mnemonicsCount = 27;
-	unsigned int i = 0;
-
-	while(tokens[i].type != 6) {
-		if (tokens[i].type == 0) {
-			if (strContainedIn(tokens[i].value.string, mnemonics, mnemonicsCount)) {
-				tokens[i].type = 3;
-			}
-
-			else if (strcmp(tokens[i].value.string, "a") == 0 || strcmp(tokens[i].value.string, "b") == 0 || strcmp(tokens[i].value.string, "c") == 0 || strcmp(tokens[i].value.string, "d") == 0) {
-				tokens[i].type = 4;
-			}
-		}
-		++i;
-	}
-	return;
 }
 
 cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
@@ -872,9 +869,6 @@ char cca_assemble(char* fileName) {
 	
 	// lex the assembly code into tokens
 	cca_token* tokens = cca_assembler_lex(content);
-
-	// recognise opcodes
-	cca_assembler_recognize(tokens);
 
 	// get rid and parse the defines
 	cca_definition_list defs = cca_assembler_define_parser(&tokens);
