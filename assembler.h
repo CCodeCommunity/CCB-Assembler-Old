@@ -105,7 +105,7 @@ char cca_is_identifier(char character) {
 }
 
 char cca_is_number(char character) {
-	return isdigit(character);
+	return character <= '9' && character >= '0';
 }
 
 char cca_is_ignorable(char character) {
@@ -479,7 +479,7 @@ void cca_assembler_replace_defs(cca_token** tokens, cca_definition_list defs) {
 		int j = 0;
 		while ((*tokens)[j].type != CCA_TOK_END) {
 			if ((*tokens)[j].type == CCA_TOK_IDENTIFIER) {
-				(*tokens)[j].type = CCA_TOK_ADDRESS;
+				(*tokens)[j].type = CCA_TOK_NUMBER;
 				(*tokens)[j].value.numeric = defs.definitions[i].pointer;
 			}
 			++j;
@@ -537,7 +537,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 
 	for (int i = 0; i < defs.length; i++) {
 		char* bytes = defs.definitions[i].value;
-		for (int j = 0; bytes[j + 1] != '\0'; j++) {
+		for (int j = 0; bytes[j] != '\0'; j++) {
 			cca_bytecode_add_byte(&bytecode, bytes[j]);
 		}
 	}
