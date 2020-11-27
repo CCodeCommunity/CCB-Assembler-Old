@@ -301,6 +301,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	cca_token* tokens = malloc(tokCapacity * sizeof(cca_token));
 	unsigned int readingPos = 0;
 	unsigned int tokCount = 0;
+	BOOL foundDef = FALSE;
 
 	// first lexing loop
 	while(readingPos < size - 1) {
@@ -313,6 +314,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
 			cca_marker newMarker = cca_parse_marker(assembly, &readingPos);
+			puts("- placing BI to marker");
 			newMarker.marks = byteIndex;
 			++markerCount;
 			if (markerCount >= markerCapacity) {
@@ -341,8 +343,17 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 1;
 
-			if (newTok.type == CCA_TOK_IDENTIFIER)
+			if (foundDef) {
+				foundDef = FALSE;
+				--byteIndex;
+			} else if (newTok.type == CCA_TOK_IDENTIFIER && strcmp(newTok.value.string, "def") == 0) {
+				foundDef = TRUE;
+				--byteIndex;
+			} else if (newTok.type == CCA_TOK_IDENTIFIER) {
 				byteIndex += 3;
+				printf("- found identifier increasing, BI is now %d\n", byteIndex);
+			} else
+				printf("- found opcode/register increasing, BI is now %d\n", byteIndex);
 		} else if (cca_is_number(current)) {
 			cca_token newTok = cca_parse_number(assembly, &readingPos);
 			++tokCount;
@@ -352,6 +363,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			}
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 4;
+			printf("- found number increasing, BI is now %d\n", byteIndex);
 		} else if (cca_is_address(current)){
 			cca_token newTok = cca_parse_address(assembly, &readingPos);
 			++tokCount;
@@ -361,6 +373,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			}
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 4;
+			printf("- found address increasing, BI is now %d\n", byteIndex);
 		} else if (cca_is_string(current)) {
 			cca_token newTok = cca_parse_string(assembly, &readingPos);
 			++tokCount;
@@ -475,6 +488,7 @@ cca_definition_list cca_assembler_define_parser(cca_token** tokens) {
 }
 
 void cca_assembler_replace_defs(cca_token** tokens, cca_definition_list defs) {
+	// replace defs
 	for (int i = 0; i < defs.length; i++) {
 		int j = 0;
 		while ((*tokens)[j].type != CCA_TOK_END) {
@@ -535,6 +549,7 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 	bytecode.bytecodeLength = 0;
 	bytecode.bytecode = malloc(bytecode.bytecodeCapacity);
 
+	// generate bytes of the header
 	for (int i = 0; i < defs.length; i++) {
 		char* bytes = defs.definitions[i].value;
 		for (int j = 0; bytes[j] != '\0'; j++) {
