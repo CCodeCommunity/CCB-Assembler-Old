@@ -314,7 +314,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			// ignore it and continue to next itteration
 		} else if (cca_is_marker(current)) {
 			cca_marker newMarker = cca_parse_marker(assembly, &readingPos);
-			puts("- placing BI to marker");
 			newMarker.marks = byteIndex;
 			++markerCount;
 			if (markerCount >= markerCapacity) {
@@ -351,9 +350,7 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 				--byteIndex;
 			} else if (newTok.type == CCA_TOK_IDENTIFIER) {
 				byteIndex += 3;
-				printf("- found identifier increasing, BI is now %d\n", byteIndex);
-			} else
-				printf("- found opcode/register increasing, BI is now %d\n", byteIndex);
+			}
 		} else if (cca_is_number(current)) {
 			cca_token newTok = cca_parse_number(assembly, &readingPos);
 			++tokCount;
@@ -363,7 +360,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			}
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 4;
-			printf("- found number increasing, BI is now %d\n", byteIndex);
 		} else if (cca_is_address(current)){
 			cca_token newTok = cca_parse_address(assembly, &readingPos);
 			++tokCount;
@@ -373,7 +369,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 			}
 			tokens[tokCount - 1] = newTok;
 			byteIndex += 4;
-			printf("- found address increasing, BI is now %d\n", byteIndex);
 		} else if (cca_is_string(current)) {
 			cca_token newTok = cca_parse_string(assembly, &readingPos);
 			++tokCount;
@@ -404,7 +399,6 @@ cca_token* cca_assembler_lex(cca_file_content content) {
 	// marker replacement
 	for (int i = 0; i < markerCount; i++) {
 		int j = 0;
-		printf(":%s @ %d\n", markers[i].name, markers[i].marks);
 		while(tokens[j].type != 6) {
 			if (tokens[j].type == 0) {
 				if (strcmp(tokens[j].value.string, markers[i].name) == 0) {
@@ -557,20 +551,22 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 		}
 	}
 
+	
+
 	cca_bytecode_add_uint(&bytecode, 0x1d1d1d1d);
 
 	char error = 0;
 	unsigned int i = 0;
-	while(tokens[i].type != 6) {
-		if (tokens[i].type != 3) {
-			if (tokens[i].type == 1 || tokens[i].type == 7)
+	while(tokens[i].type != CCA_TOK_END) {
+		if (tokens[i].type != CCA_TOK_OPCODE) {
+			if (tokens[i].type == CCA_TOK_NUMBER || tokens[i].type == CCA_TOK_ADDRESS)
 				printf("[ERROR] unexpected token: '%d' while generating bytecode\n", tokens[i].value.numeric);
 			else
 				printf("[ERROR] unexpected token: '%s' while generating bytecode\n", tokens[i].value.string);
 			i += 1;
 			error = 1;
 		} else if (strcmp(tokens[i].value.string, "stp") == 0) {
-			if (tokens[i + 1].type == 3 || tokens[i + 1].type == 6) {
+			if (tokens[i + 1].type == CCA_TOK_OPCODE || tokens[i + 1].type == CCA_TOK_END) {
 				cca_bytecode_add_byte(&bytecode, 0x00);
 				i += 1;
 			} else {
@@ -579,21 +575,25 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 				i += 1;
 			}
 		} else if (strcmp(tokens[i].value.string, "psh") == 0) {
-			if (tokens[i + 1].type == 1) {
+			if (tokens[i + 1].type == CCA_TOK_NUMBER) {
 				cca_bytecode_add_byte(&bytecode, 0x01);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 				i += 2;
-			} else if (tokens[i + 1].type == 4){
-				cca_bytecode_add_byte(&bytecode, 0x02);
-				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
-				i += 2;
+			} else if (tokens[i + 1].type == CCA_TOK_REGISTER) {
+                cca_bytecode_add_byte(&bytecode, 0x02);
+                cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+                i += 2;
+            } else if (tokens[i + 1].type == CCA_TOK_ADDRESS) {
+                cca_bytecode_add_byte(&bytecode, 0x0B);
+                cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+                i += 2;
 			} else {
 				puts("[ERROR] on 'psh' instruction, illegal combination of operands");
 				error = 1;
 				i += 1;
 			}
 		} else if (strcmp(tokens[i].value.string, "pop") == 0) {
-			if (tokens[i + 1].type == 4) {
+			if (tokens[i + 1].type == CCA_TOK_REGISTER) {
 				cca_bytecode_add_byte(&bytecode, 0x03);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
 				i += 2;
@@ -616,26 +616,36 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 				i += 1;
 			}
 		} else if (strcmp(tokens[i].value.string, "mov") == 0) {
-			if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
+			if (tokens[i + 1].type == CCA_TOK_REGISTER && tokens[i + 2].type == CCA_TOK_DIVIDER && tokens[i + 3].type == CCA_TOK_NUMBER) {
 				cca_bytecode_add_byte(&bytecode, 0x06);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
 				i += 4;
-			} else if (tokens[i + 1].type == 7 && tokens[i + 2].type == 2 && tokens[i + 3].type == 1) {
+			} else if (tokens[i + 1].type == CCA_TOK_ADDRESS && tokens[i + 2].type == CCA_TOK_DIVIDER && tokens[i + 3].type == CCA_TOK_NUMBER) {
 				cca_bytecode_add_byte(&bytecode, 0x07);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
 				i += 4;
-			} else if (tokens[i + 1].type == 4 && tokens[i + 2].type == 2 && tokens[i + 3].type == 7) {
+			} else if (tokens[i + 1].type == CCA_TOK_REGISTER && tokens[i + 2].type == CCA_TOK_DIVIDER && tokens[i + 3].type == CCA_TOK_ADDRESS) {
 				cca_bytecode_add_byte(&bytecode, 0x08);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
 				i += 4;
-			} else if (tokens[i + 1].type == 7 && tokens[i + 2].type == 2 && tokens[i + 3].type == 4) {
+			} else if (tokens[i + 1].type == CCA_TOK_ADDRESS && tokens[i + 2].type == CCA_TOK_DIVIDER && tokens[i + 3].type == CCA_TOK_REGISTER) {
 				cca_bytecode_add_byte(&bytecode, 0x09);
 				cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
 				cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
 				i += 4;
+			} else if (tokens[i + 1].type == CCA_TOK_REGISTER && tokens[i + 2].type == CCA_TOK_DIVIDER && tokens[i + 3].type == CCA_TOK_REGISTER) {
+                cca_bytecode_add_byte(&bytecode, 0x0a);
+                cca_bytecode_add_reg(&bytecode, tokens[i + 1].value.string);
+                cca_bytecode_add_reg(&bytecode, tokens[i + 3].value.string);
+                i += 4;
+            } else if (tokens[i + 1].type == CCA_TOK_ADDRESS && tokens[i + 2].type == CCA_TOK_DIVIDER && tokens[i + 3].type == CCA_TOK_REGISTER) {
+			    cca_bytecode_add_byte(&bytecode, 0x0B);
+			    cca_bytecode_add_uint(&bytecode, tokens[i + 1].value.numeric);
+			    cca_bytecode_add_uint(&bytecode, tokens[i + 3].value.numeric);
+			    i += 4;
 			} else {
 				puts("[ERROR] on 'mov' instruction, illegal combination of operands");
 				error = 1;
@@ -899,6 +909,8 @@ char cca_assembler_bytegeneration(cca_token* tokens, cca_definition_list defs) {
 		}
 	}
 
+	
+
 	if (!error) {
 		fwrite(bytecode.bytecode, 1, bytecode.bytecodeLength, fp);
 	}
@@ -916,6 +928,8 @@ char cca_assemble(char* fileName) {
 
 	// parse the defines and get rid of them in the tokens
 	cca_definition_list defs = cca_assembler_define_parser(&tokens);
+
+	
 
 	// replace all the unknown identifiers with their corresponding define pointer
 	cca_assembler_replace_defs(&tokens, defs);

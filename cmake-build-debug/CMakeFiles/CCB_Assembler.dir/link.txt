@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/CCB_Assembler.dir/main.c.o  -o CCB_Assembler 

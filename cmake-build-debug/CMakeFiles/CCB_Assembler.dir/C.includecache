@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/luc/Projects/CCB-Assembler/assembler.h
+stdlib.h
+-
+stdio.h
+-
+ctype.h
+-
+
+/home/luc/Projects/CCB-Assembler/main.c
+stdio.h
+-
+string.h
+-
+assembler.h
+/home/luc/Projects/CCB-Assembler/assembler.h
+
